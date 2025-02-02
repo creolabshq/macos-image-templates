@@ -28,7 +28,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
   DEFAULT_MACOS: 'sequoia'
   DEFAULT_XCODE: '16.2'
-  DEFAULT_CPU: '8'
+  DEFAULT_CPU: '12'
   DEFAULT_MEMORY: '16'
   MACOS_VERSION: ${{ github.event.inputs.macos_version || 'sequoia' }}
   CPU_COUNT: ${{ github.event.inputs.cpu_count || '8' }}
@@ -38,7 +38,7 @@ env:
 
 jobs:
   build:
-    runs-on: self-hosted
+    runs-on: macos-latest
     permissions:
       contents: read
       packages: write
@@ -68,15 +68,15 @@ jobs:
           
           packer build \
             -var "tag=runner" \
-            -var "disk_free_mb=100000" \
+            -var "disk_free_mb=10000" \
             -var "cpu_count=${{ env.CPU_COUNT }}" \
             -var "memory_gb=${{ env.MEMORY_GB }}" \
             -var "macos_version=${{ env.MACOS_VERSION }}" \
             -var "xcode_version=[\"${{ env.XCODE_VERSION }}\"]" \
-            -var "disk_size=250" \
+            -var "disk_size=128" \
             templates/expo.pkr.hcl
 
       - name: Push Image
         if: github.event_name != 'pull_request'
         run: |
-          tart push ${{ env.VM_IMAGE_NAME }} ${{ env.REGISTRY }}/${{ github.repository }}/${{ env.VM_IMAGE_NAME }} 
+          tart push ${{ env.VM_IMAGE_NAME }} ${{ env.REGISTRY }}/creolabshq/${{ env.VM_IMAGE_NAME }} 
