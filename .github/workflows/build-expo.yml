@@ -1,0 +1,82 @@
+name: Build and Publish Expo Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      macos_version:
+        description: 'macOS Version'
+        required: true
+        default: 'sequoia'
+        type: choice
+        options:
+          - sequoia
+          - sonoma
+      cpu_count:
+        description: 'CPU Count'
+        required: true
+        default: '8'
+        type: string
+      memory_gb:
+        description: 'Memory GB'
+        required: true
+        default: '16'
+        type: string
+
+env:
+  TART_REGISTRY_HOSTNAME: ghcr.io
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  DEFAULT_MACOS: 'sequoia'
+  DEFAULT_XCODE: '16.2'
+  DEFAULT_CPU: '8'
+  DEFAULT_MEMORY: '16'
+  MACOS_VERSION: ${{ github.event.inputs.macos_version || 'sequoia' }}
+  CPU_COUNT: ${{ github.event.inputs.cpu_count || '8' }}
+  MEMORY_GB: ${{ github.event.inputs.memory_gb || '16' }}
+  XCODE_VERSION: '16.2' 
+  VM_IMAGE_NAME: runner-cpu-${{ github.event.inputs.cpu_count || '8' }}-memory-${{ github.event.inputs.memory_gb || '16' }}:${{ github.event.inputs.macos_version || 'sequoia' }}
+
+jobs:
+  build:
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Homebrew
+        run: |
+          brew update
+          brew install cirruslabs/cli/tart packer
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Base Image
+        run: |
+          tart pull ghcr.io/cirruslabs/macos-${{ env.MACOS_VERSION }}-base:latest
+
+      - name: Build Tart VM Image
+        run: |
+          packer init templates/expo.pkr.hcl
+          
+          packer build \
+            -var "tag=runner" \
+            -var "disk_free_mb=100000" \
+            -var "cpu_count=${{ env.CPU_COUNT }}" \
+            -var "memory_gb=${{ env.MEMORY_GB }}" \
+            -var "macos_version=${{ env.MACOS_VERSION }}" \
+            -var "xcode_version=[\"${{ env.XCODE_VERSION }}\"]" \
+            -var "disk_size=250" \
+            templates/expo.pkr.hcl
+
+      - name: Push Image
+        if: github.event_name != 'pull_request'
+        run: |
+          tart push ${{ env.VM_IMAGE_NAME }} ${{ env.REGISTRY }}/${{ github.repository }}/${{ env.VM_IMAGE_NAME }} 
