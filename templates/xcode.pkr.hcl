@@ -15,9 +15,26 @@ variable "xcode_version" {
   type = list(string)
 }
 
-variable "additional_runtimes" {
+variable "additional_ios_builds" {
   type = list(string)
   default = []
+}
+
+variable "additional_tvos_builds" {
+  type = list(string)
+  default = []
+}
+
+variable "xcode_components" {
+  type    = list(string)
+  default = []
+  description = "Additional Xcode components to download."
+}
+
+variable "expected_runtimes_file" {
+  type    = string
+  default = ""
+  description = "Path to file containing expected simulator runtimes. If empty, runtime verification is skipped."
 }
 
 variable "tag" {
@@ -27,7 +44,7 @@ variable "tag" {
 
 variable "disk_size" {
   type = number
-  default = 100
+  default = 140
 }
 
 variable "disk_free_mb" {
@@ -37,7 +54,7 @@ variable "disk_free_mb" {
 
 variable "android_sdk_tools_version" {
   type    = string
-  default = "11076708" # https://developer.android.com/studio#command-line-tools-only
+  default = "14742923" # https://developer.android.com/studio#command-line-tools-only
 }
 
 source "tart-cli" "tart" {
@@ -66,8 +83,9 @@ locals {
         "APP_DIR=$(dirname $CONTENTS_DIR)",
         "sudo mv $APP_DIR /Applications/Xcode_${version}.app",
         "sudo xcode-select -s /Applications/Xcode_${version}.app",
-        "xcodebuild -downloadAllPlatforms",
+        "xcodebuild -downloadPlatform iOS",
         "xcodebuild -runFirstLaunch",
+        "df -h",
       ]
     }
   ]
@@ -82,6 +100,9 @@ build {
       "brew --version",
       "brew update",
       "brew upgrade",
+      "brew install codex",
+      "brew install --cask claude-code",
+      "brew install --cask amazon-q"
     ]
   }
 
@@ -112,14 +133,14 @@ build {
       "rm android-sdk-tools.zip",
       "mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest",
       "yes | sdkmanager --licenses",
-      "yes | sdkmanager 'platform-tools' 'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018'"
+      "yes | sdkmanager 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'"
     ]
   }
 
   provisioner "shell" {
     inline = [
       "source ~/.zprofile",
-      "brew install xcodesorg/made/xcodes",
+      "brew install xcodes",
       "xcodes version",
     ]
   }
@@ -127,6 +148,13 @@ build {
   provisioner "file" {
     sources      = [ for version in var.xcode_version : pathexpand("~/XcodesCache/Xcode_${version}.xip")]
     destination = "/Users/admin/Downloads/"
+  }
+
+  provisioner "shell" {
+    inline = [
+      "source ~/.zprofile",
+      "df -h",
+    ]
   }
 
   // iterate over all Xcode versions and install them
@@ -139,10 +167,35 @@ build {
     }
   }
 
+  dynamic "provisioner" {
+    for_each = length(var.xcode_version) > 2 ? [2] : []
+    labels = ["shell"]
+    content {
+      inline = [
+        "source ~/.zprofile",
+        "sudo xcodes select '${var.xcode_version[2]}'",
+        "xcodebuild -downloadAllPlatforms",
+      ]
+    }
+  }
+
+  dynamic "provisioner" {
+    for_each = length(var.xcode_version) > 1 ? [1] : []
+    labels = ["shell"]
+    content {
+      inline = [
+        "source ~/.zprofile",
+        "sudo xcodes select '${var.xcode_version[1]}'",
+        "xcodebuild -downloadAllPlatforms",
+      ]
+    }
+  }
+
   provisioner "shell" {
     inline = [
       "source ~/.zprofile",
       "sudo xcodes select '${var.xcode_version[0]}'",
+      "xcodebuild -downloadAllPlatforms",
     ]
   }
 
@@ -150,9 +203,69 @@ build {
     inline = concat(
       ["source ~/.zprofile"],
       [
-        for runtime in var.additional_runtimes : "sudo xcodes runtimes install ${runtime}"
+        for runtime in var.additional_ios_builds : "xcodebuild -downloadPlatform iOS -buildVersion ${runtime}"
       ]
     )
+  }
+
+  provisioner "shell" {
+    inline = concat(
+      ["source ~/.zprofile"],
+      [
+        for runtime in var.additional_tvos_builds : "xcodebuild -downloadPlatform tvOS -buildVersion ${runtime}"
+      ]
+    )
+  }
+
+  provisioner "shell" {
+    inline = concat(
+      ["source ~/.zprofile"],
+      [
+        for component in var.xcode_components : "xcodebuild -downloadComponent ${component}"
+      ]
+    )
+  }
+
+  provisioner "shell" {
+    inline = [
+      "source ~/.zprofile",
+      "brew install libimobiledevice ideviceinstaller ios-deploy carthage",
+      "brew install xcbeautify swiftformat swiftlint swiftgen licenseplist",
+      "brew install mint",
+      "brew tap tuist/tuist",
+      "brew install --formula tuist",
+      "rbenv install 3.3.10",
+      "rbenv global 3.3.10", # fastlane conflicts with 3.4.0+ https://github.com/fastlane/fastlane/issues/29527
+      "gem update",
+      "gem install fastlane",
+      "gem install cocoapods",
+      "gem install xcpretty",
+      "gem uninstall --ignore-dependencies ffi && gem install ffi -- --enable-libffi-alloc"
+    ]
+  }
+
+  // Copy expected runtimes file if provided
+  dynamic "provisioner" {
+    for_each = var.expected_runtimes_file != "" ? [1] : []
+    labels = ["file"]
+    content {
+      source      = var.expected_runtimes_file
+      destination = "/Users/admin/runtimes.expected.txt"
+    }
+  }
+
+  // Verify simulator runtimes match expected list if file was provided
+  dynamic "provisioner" {
+    for_each = var.expected_runtimes_file != "" ? [1] : []
+    labels = ["shell"]
+    content {
+      inline = [
+        "source ~/.zprofile",
+        "xcrun simctl list runtimes > /Users/admin/runtimes.actual.txt",
+        "diff -q /Users/admin/runtimes.actual.txt /Users/admin/runtimes.expected.txt || (echo 'Simulator runtimes do not match expected list' && cat /Users/admin/runtimes.actual.txt && exit 1)",
+        "rm /Users/admin/runtimes.actual.txt /Users/admin/runtimes.expected.txt"
+      ]
+    }
   }
 
   provisioner "shell" {
@@ -167,17 +280,6 @@ build {
       "flutter doctor --android-licenses",
       "flutter doctor",
       "flutter precache",
-    ]
-  }
-  provisioner "shell" {
-    inline = [
-      "source ~/.zprofile",
-      "brew install libimobiledevice ideviceinstaller ios-deploy fastlane carthage",
-      "brew install xcbeautify",
-      "gem update",
-      "gem install cocoapods",
-      "gem install xcpretty",
-      "gem uninstall --ignore-dependencies ffi && gem install ffi -- --enable-libffi-alloc"
     ]
   }
 
@@ -240,6 +342,19 @@ build {
     ]
   }
 
+  # Wait for the "update_dyld_sim_shared_cache" process[1][2] to finish
+  # to avoid wasting CPU cycles after boot
+  #
+  # [1]: https://apple.stackexchange.com/questions/412101/update-dyld-sim-shared-cache-is-taking-up-a-lot-of-memory
+  # [2]: https://stackoverflow.com/a/68394101/9316533
+  provisioner "shell" {
+    inline = [
+      "source ~/.zprofile",
+      "xcrun simctl runtime dyld_shared_cache update --all || sleep 180",
+      "xcrun simctl list -v"
+    ]
+  }
+
   # Compatibility with GitHub Actions Runner Images, where
   # /usr/local/bin belongs to the default user. Also see [2].
   #
@@ -251,14 +366,26 @@ build {
     ]
   }
 
-  # Wait for the "update_dyld_sim_shared_cache" process[1][2] to finish
-  # to avoid wasting CPU cycles after boot
-  #
-  # [1]: https://apple.stackexchange.com/questions/412101/update-dyld-sim-shared-cache-is-taking-up-a-lot-of-memory
-  # [2]: https://stackoverflow.com/a/68394101/9316533
+  // Install setup-info-generator
   provisioner "shell" {
     inline = [
-      "sleep 1800"
+      "source ~/.zprofile",
+      "brew install cirruslabs/cli/setup-info-generator"
+    ]
+  }
+
+  // Copy setup info template
+  provisioner "file" {
+    source      = "data/setup-info-template.json"
+    destination = "~/setup-info-template.json"
+  }
+
+  // Generate setup info
+  provisioner "shell" {
+    inline = [
+      "source ~/.zprofile",
+      "cat ~/setup-info-template.json | setup-info-generator > ~/actions-runner/.setup_info",
+      "rm ~/setup-info-template.json"
     ]
   }
 }

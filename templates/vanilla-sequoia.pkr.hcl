@@ -12,14 +12,15 @@ packer {
 }
 
 source "tart-cli" "tart" {
-  from_ipsw    = "https://updates.cdn-apple.com/2025WinterFCS/fullrestores/072-08269/7CAAB9F7-E970-428D-8764-4CD7BCD105CD/UniversalMac_15.3_24D60_Restore.ipsw"
+  // will be update to 15.7.2
+  from_ipsw    = "https://updates.cdn-apple.com/2025SummerFCS/fullrestores/093-10809/CFD6DD38-DAF0-40DA-854F-31AAD1294C6F/UniversalMac_15.6.1_24G90_Restore.ipsw"
   vm_name      = "sequoia-vanilla"
   cpu_count    = 4
   memory_gb    = 8
-  disk_size_gb = 40
+  disk_size_gb = 50
   ssh_password = "admin"
   ssh_username = "admin"
-  ssh_timeout  = "300s"
+  ssh_timeout  = "180s"
   boot_command = [
     # hello, hola, bonjour, etc.
     "<wait60s><spacebar>",
@@ -31,28 +32,30 @@ source "tart-cli" "tart" {
     #
     # [1]: should be named "English (US)", but oh well 🤷
     "<wait30s>italiano<esc>english<enter>",
-    # Select Your Country and Region
+    # Select Your Country or Region
     "<wait30s>united states<leftShiftOn><tab><leftShiftOff><spacebar>",
+    # Transfer Your Data to This Mac
+    "<wait10s><tab><tab><tab><spacebar><tab><tab><spacebar>",
     # Written and Spoken Languages
     "<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>",
     # Accessibility
     "<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>",
     # Data & Privacy
     "<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>",
-    # Migration Assistant
-    "<wait10s><tab><tab><tab><spacebar>",
+    # Create a Mac Account
+    "<wait10s>Managed via Tart<tab>admin<tab>admin<tab>admin<tab><tab><spacebar><tab><tab><spacebar>",
+    # Enable Voice Over
+    "<wait120s><leftAltOn><f5><leftAltOff>",
     # Sign In with Your Apple ID
-    "<wait10s><leftShiftOn><tab><leftShiftOff><leftShiftOn><tab><leftShiftOff><spacebar>",
+    "<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>",
     # Are you sure you want to skip signing in with an Apple ID?
     "<wait10s><tab><spacebar>",
     # Terms and Conditions
     "<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>",
     # I have read and agree to the macOS Software License Agreement
     "<wait10s><tab><spacebar>",
-    # Create a Computer Account
-    "<wait10s>admin<tab><tab>admin<tab>admin<tab><tab><tab><spacebar>",
     # Enable Location Services
-    "<wait120s><leftShiftOn><tab><leftShiftOff><spacebar>",
+    "<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>",
     # Are you sure you don't want to use Location Services?
     "<wait10s><tab><spacebar>",
     # Select Your Time Zone
@@ -65,8 +68,12 @@ source "tart-cli" "tart" {
     "<wait10s><tab><spacebar><leftShiftOn><tab><leftShiftOff><spacebar>",
     # Choose Your Look
     "<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>",
+    # Update Mac Automatically
+    "<wait10s><tab><spacebar>",
     # Welcome to Mac
     "<wait10s><spacebar>",
+    # Disable Voice Over
+    "<leftAltOn><f5><leftAltOff>",
     # Enable Keyboard navigation
     # This is so that we can navigate the System Settings app using the keyboard
     "<wait10s><leftAltOn><spacebar><leftAltOff>Terminal<enter>",
@@ -75,11 +82,25 @@ source "tart-cli" "tart" {
     # Now that the installation is done, open "System Settings"
     "<wait10s><leftAltOn><spacebar><leftAltOff>System Settings<enter>",
     # Navigate to "Sharing"
-    "<wait10s><leftAltOn>f<leftAltOff>sharing<enter>",
+    "<wait10s><leftCtrlOn><f2><leftCtrlOff><right><right><right><down>Sharing<enter>",
     # Navigate to "Screen Sharing" and enable it
-    "<wait10s><tab><tab><tab><tab><tab><spacebar>",
+    "<wait10s><tab><tab><tab><tab><tab><tab><tab><spacebar>",
     # Navigate to "Remote Login" and enable it
     "<wait10s><tab><tab><tab><tab><tab><tab><tab><tab><tab><tab><tab><tab><spacebar>",
+    # Quit System Settings
+    "<wait10s><leftAltOn>q<leftAltOff>",
+    # Disable Gatekeeper (1/2)
+    "<wait10s><leftAltOn><spacebar><leftAltOff>Terminal<enter>",
+    "<wait10s>sudo spctl --global-disable<enter>",
+    "<wait10s>admin<enter>",
+    "<wait10s><leftAltOn>q<leftAltOff>",
+    # Disable Gatekeeper (2/2)
+    "<wait10s><leftAltOn><spacebar><leftAltOff>System Settings<enter>",
+    "<wait10s><leftCtrlOn><f2><leftCtrlOff><right><right><right><down>Privacy & Security<enter>",
+    "<wait10s><leftShiftOn><tab><leftShiftOff><leftShiftOn><tab><leftShiftOff><leftShiftOn><tab><leftShiftOff><leftShiftOn><tab><leftShiftOff><leftShiftOn><tab><leftShiftOff><leftShiftOn><tab><leftShiftOff><leftShiftOn><tab><leftShiftOff>",
+    "<wait10s><down><wait1s><down><wait1s><enter>",
+    "<wait10s>admin<enter>",
+    "<wait10s><leftShiftOn><tab><leftShiftOff><wait1s><spacebar>",
     # Quit System Settings
     "<wait10s><leftAltOn>q<leftAltOff>",
   ]
@@ -128,14 +149,29 @@ build {
 
   provisioner "shell" {
     inline = [
+      # Ensure that Gatekeeper is disabled
+      "spctl --status | grep -q 'assessments disabled'"
+    ]
+  }
+
+  provisioner "shell" {
+    inline = [
       # Install command-line tools
       "touch /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress",
-      "softwareupdate --list | sed -n 's/.*Label: \\(Command Line Tools for Xcode-.*\\)/\\1/p' | tr '\\n' '\\0' | xargs -0 softwareupdate --install",
+      "softwareupdate --list | sed -n 's/.*Label: \\(Command Line Tools for Xcode-.*\\)/\\1/p' | xargs -I {} softwareupdate --install '{}'",
       "rm /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress",
     ]
   }
 
   provisioner "ansible" {
     playbook_file = "ansible/playbook-system-updater.yml"
+    extra_arguments = [
+      "-vvv",
+    ]
+    ansible_env_vars = [
+      "ANSIBLE_TRANSPORT=paramiko",
+      "ANSIBLE_HOST_KEY_CHECKING=False",
+    ]
+    use_proxy = false
   }
 }

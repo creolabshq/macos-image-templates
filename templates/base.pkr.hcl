@@ -7,13 +7,12 @@ packer {
   }
 }
 
-variable "macos_version" {
+variable "vm_name" {
   type = string
 }
 
 source "tart-cli" "tart" {
-  vm_base_name = "ghcr.io/cirruslabs/macos-${var.macos_version}-vanilla:latest"
-  vm_name      = "${var.macos_version}-base"
+  vm_name      = "${var.vm_name}"
   cpu_count    = 4
   memory_gb    = 8
   disk_size_gb = 50
@@ -65,6 +64,8 @@ build {
       "brew --version",
       "brew update",
       "brew install wget unzip zip ca-certificates cmake gcc git-lfs jq yq gh gitlab-runner",
+      "brew install buildkite/buildkite/buildkite-agent",
+      "brew install equinix-labs/otel-cli/otel-cli",
       "brew install curl || true", // doesn't work on Monterey
       "brew install --cask git-credential-manager",
       "git lfs install",
@@ -105,6 +106,7 @@ build {
       "brew install libyaml", # https://github.com/rbenv/ruby-build/discussions/2118
       "brew install rbenv",
       "echo 'if which rbenv > /dev/null; then eval \"$(rbenv init -)\"; fi' >> ~/.zprofile",
+      "brew install mise",
       "source ~/.zprofile",
       "rbenv install 2.7.8", // latest 2.x.x before EOL
       "rbenv install -l | grep -v - | tail -2 | xargs -L1 rbenv install",
@@ -115,8 +117,8 @@ build {
   provisioner "shell" {
     inline = [
       "source ~/.zprofile",
-      "brew install node@20",
-      "echo 'export PATH=\"/opt/homebrew/opt/node@20/bin:$PATH\"' >> ~/.zprofile",
+      "brew install node@24",
+      "echo 'export PATH=\"/opt/homebrew/opt/node@24/bin:$PATH\"' >> ~/.zprofile",
       "source ~/.zprofile",
       "node --version",
       "npm install --global yarn",
@@ -145,8 +147,39 @@ build {
     inline = [
       "source ~/.zprofile",
       "test -d /Users/runner",
-      "test -f ~/.ssh/known_hosts",
-      "brew doctor"
+      "test -f ~/.ssh/known_hosts"
     ]
+  }
+
+  // Guest agent for Tart VMs
+  provisioner "file" {
+    source      = "data/tart-guest-daemon.plist"
+    destination = "~/tart-guest-daemon.plist"
+  }
+  provisioner "file" {
+    source      = "data/tart-guest-agent.plist"
+    destination = "~/tart-guest-agent.plist"
+  }
+  provisioner "shell" {
+    inline = [
+      # Install Tart Guest Agent
+      "source ~/.zprofile",
+      "brew install cirruslabs/cli/tart-guest-agent",
+
+      # Install daemon variant of the Tart Guest Agent
+      "sudo mv ~/tart-guest-daemon.plist /Library/LaunchDaemons/org.cirruslabs.tart-guest-daemon.plist",
+      "sudo chown root:wheel /Library/LaunchDaemons/org.cirruslabs.tart-guest-daemon.plist",
+      "sudo chmod 0644 /Library/LaunchDaemons/org.cirruslabs.tart-guest-daemon.plist",
+
+      # Install agent variant of the Tart Guest Agent
+      "sudo mv ~/tart-guest-agent.plist /Library/LaunchAgents/org.cirruslabs.tart-guest-agent.plist",
+      "sudo chown root:wheel /Library/LaunchAgents/org.cirruslabs.tart-guest-agent.plist",
+      "sudo chmod 0644 /Library/LaunchAgents/org.cirruslabs.tart-guest-agent.plist",
+    ]
+  }
+
+  # Update TCC.db and allow automation tools
+  provisioner "shell" {
+    script = "scripts/update-tcc-database.sh"
   }
 }

@@ -1,7 +1,7 @@
 packer {
   required_plugins {
     tart = {
-      version = ">= 1.12.0"
+      version = ">= 1.16.0"
       source  = "github.com/cirruslabs/tart"
     }
     ansible = {
@@ -12,16 +12,14 @@ packer {
 }
 
 source "tart-cli" "tart" {
-  # You can find macOS IPSW URLs on various websites like https://ipsw.me/
-  # and https://www.theiphonewiki.com/wiki/Beta_Firmware/Mac/13.x
-  from_ipsw    = "https://updates.cdn-apple.com/2023FallFCS/fullrestores/042-55833/C0830847-A2F8-458F-B680-967991820931/UniversalMac_13.6_22G120_Restore.ipsw"
-  vm_name      = "ventura-vanilla"
+  from_ipsw    = "https://updates.cdn-apple.com/2026WinterFCS/fullrestores/122-00766/062A6121-2ABE-45D7-BCB1-72B666B6D2C2/UniversalMac_26.4_25E246_Restore.ipsw"
+  vm_name      = "tahoe-vanilla"
   cpu_count    = 4
   memory_gb    = 8
   disk_size_gb = 50
   ssh_password = "admin"
   ssh_username = "admin"
-  ssh_timeout  = "120s"
+  ssh_timeout  = "180s"
   boot_command = [
     # hello, hola, bonjour, etc.
     "<wait60s><spacebar>",
@@ -33,58 +31,85 @@ source "tart-cli" "tart" {
     #
     # [1]: should be named "English (US)", but oh well 🤷
     "<wait30s>italiano<esc>english<enter>",
-    # Select Your Country and Region
-    "<wait30s>united states<leftShiftOn><tab><leftShiftOff><spacebar>",
+    # Select Your Country or Region
+    "<wait60s><click 'Select Your Country or Region'><wait5s>united states<leftShiftOn><tab><leftShiftOff><spacebar>",
+    # Transfer Your Data to This Mac
+    "<wait10s><tab><tab><tab><spacebar><tab><tab><spacebar>",
     # Written and Spoken Languages
     "<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>",
     # Accessibility
     "<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>",
     # Data & Privacy
     "<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>",
-    # Migration Assistant
-    "<wait10s><tab><tab><tab><spacebar>",
+    # Create a Mac Account
+    "<wait10s><tab><tab><tab><tab><tab><tab>Managed via Tart<tab>admin<tab>admin<tab>admin<tab><tab><spacebar><tab><tab><spacebar>",
+    # Enable Voice Over
+    "<wait120s><leftAltOn><f5><leftAltOff>",
     # Sign In with Your Apple ID
-    "<wait10s><leftShiftOn><tab><leftShiftOff><leftShiftOn><tab><leftShiftOff><spacebar>",
+    "<wait10s><leftShiftOn><tab><leftShiftOff><spacebar><up><spacebar>",
     # Are you sure you want to skip signing in with an Apple ID?
     "<wait10s><tab><spacebar>",
     # Terms and Conditions
     "<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>",
     # I have read and agree to the macOS Software License Agreement
     "<wait10s><tab><spacebar>",
-    # Create a Computer Account
-    "<wait10s>admin<tab><tab>admin<tab>admin<tab><tab><tab><spacebar>",
+    # Age Range -> Adult
+    "<wait10s><tab><tab><tab><spacebar>",
     # Enable Location Services
     "<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>",
     # Are you sure you don't want to use Location Services?
     "<wait10s><tab><spacebar>",
     # Select Your Time Zone
-    "<wait10s><tab>UTC<enter><leftShiftOn><tab><leftShiftOff><spacebar>",
+    "<wait10s><tab><tab><tab>UTC<enter><leftShiftOn><tab><leftShiftOff><spacebar>",
     # Analytics
     "<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>",
     # Screen Time
-    "<wait10s><tab><spacebar>",
+    "<wait10s><tab><tab><spacebar>",
     # Siri
     "<wait10s><tab><spacebar><leftShiftOn><tab><leftShiftOff><spacebar>",
+    # You Mac is Ready for FileVault
+    "<wait10s><leftShiftOn><tab><tab><leftShiftOff><spacebar>",
+    # Mac Data Will Not Be Securely Encrypted
+    "<wait10s><tab><spacebar>",
     # Choose Your Look
     "<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>",
-    # Enable Voice Over
-    "<wait10s><leftAltOn><f5><leftAltOff><wait5s>v",
-    # Now that the installation is done, open "System Settings"
-    "<wait10s><leftAltOn><spacebar><leftAltOff>System Settings<enter>",
-    # Navigate to "Sharing"
-    "<wait10s><leftAltOn>f<leftAltOff>sharing<enter>",
-    # Navigate to "Screen Sharing" and enable it
-    "<wait10s><tab><down><spacebar>",
-    # Navigate to "Remote Login" and enable it
-    "<wait10s><tab><tab><tab><tab><tab><tab><spacebar>",
-    # Open "Remote Login" details
-    "<wait10s><tab><spacebar>",
-    # Enable "Full Disk Access"
-    "<wait10s><tab><spacebar>",
-    # Click "Done"
-    "<wait10s><leftShiftOn><tab><leftShiftOff><leftShiftOn><tab><leftShiftOff><spacebar>",
+    # Update Mac Automatically
+    "<wait10s><tab><tab><spacebar>",
+    # Welcome to Mac
+    "<wait30s><spacebar>",
     # Disable Voice Over
-    "<leftAltOn><f5><leftAltOff>",
+    "<wait10s><leftAltOn><f5><leftAltOff>",
+    # Enable Keyboard navigation
+    # This is so that we can navigate the System Settings app using the keyboard
+    "<wait10s><leftAltOn><spacebar><leftAltOff>Terminal<wait10s><enter>",
+    "<wait10s><wait10s>defaults write NSGlobalDomain AppleKeyboardUIMode -int 3<enter>",
+    # Now that the installation is done, open "System Settings"
+    # On Tahoe opening System Settings through Spotlight is not very reliable, sometimes opens System information
+    "<wait10s>open '/System/Applications/System Settings.app'<enter>",
+    "<wait120s>",
+    # Navigate to "Sharing"
+    "<wait10s><leftCtrlOn><f2><leftCtrlOff><right><right><right><down>Sharing<enter>",
+    # Navigate to "Screen Sharing" and enable it
+    "<wait10s><tab><tab><tab><tab><tab><spacebar>",
+    # Type in the password to allow enabling Screen Sharing
+    "<wait10s>admin<enter>",
+    # Navigate to "Remote Login" and enable it
+    "<wait10s><tab><tab><tab><tab><tab><tab><tab><tab><tab><tab><tab><tab><spacebar>",
+    # Quit System Settings
+    "<wait10s><leftAltOn>q<leftAltOff>",
+    # Disable Gatekeeper (1/2)
+    "<wait10s>sudo spctl --global-disable<enter>",
+    "<wait10s>admin<enter>",
+    # Disable Gatekeeper (2/2)
+    # On Tahoe opening System Settings through Spotlight is not very reliable, sometimes opens System information
+    "<wait10s>open '/System/Applications/System Settings.app'<enter>",
+    "<wait10s><leftCtrlOn><f2><leftCtrlOff><right><right><right><down>Privacy & Security<enter>",
+    "<wait10s><leftShiftOn><tab><tab><tab><tab><tab><tab><leftShiftOff>",
+    "<wait10s><down><wait1s><down><wait1s><enter>",
+    "<wait10s>admin<enter>",
+    "<wait10s><leftShiftOn><tab><leftShiftOff><wait1s><spacebar>",
+    # Quit System Settings
+    "<wait10s><leftAltOn>q<leftAltOff>",
   ]
 
   // A (hopefully) temporary workaround for Virtualization.Framework's
@@ -112,9 +137,7 @@ build {
       // Disable screensaver for admin user
       "defaults -currentHost write com.apple.screensaver idleTime 0",
       // Prevent the VM from sleeping
-      "sudo systemsetup -setdisplaysleep Off 2>/dev/null",
       "sudo systemsetup -setsleep Off 2>/dev/null",
-      "sudo systemsetup -setcomputersleep Off 2>/dev/null",
       // Launch Safari to populate the defaults
       "/Applications/Safari.app/Contents/MacOS/Safari &",
       "SAFARI_PID=$!",
@@ -128,28 +151,13 @@ build {
       // Note that this only works if the user is logged-in,
       // i.e. not on login screen.
       "sysadminctl -screenLock off -password admin",
-      "defaults -currentHost write com.apple.screensaver idleTime 0"
     ]
   }
 
   provisioner "shell" {
     inline = [
-      # Install command-line tools
-      "touch /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress",
-      "softwareupdate --list | sed -n 's/.*Label: \\(Command Line Tools for Xcode-.*\\)/\\1/p' | xargs -I {} softwareupdate --install '{}'",
-      "rm /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress",
+      # Ensure that Gatekeeper is disabled
+      "spctl --status | grep -q 'assessments disabled'"
     ]
-  }
-
-  provisioner "ansible" {
-    playbook_file = "ansible/playbook-system-updater.yml"
-    extra_arguments = [
-      "-vvv",
-    ]
-    ansible_env_vars = [
-      "ANSIBLE_TRANSPORT=paramiko",
-      "ANSIBLE_HOST_KEY_CHECKING=False",
-    ]
-    use_proxy = false
   }
 }

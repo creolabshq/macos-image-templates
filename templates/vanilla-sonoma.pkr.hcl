@@ -12,14 +12,15 @@ packer {
 }
 
 source "tart-cli" "tart" {
-  from_ipsw    = "https://updates.cdn-apple.com/2024SummerFCS/fullrestores/052-69922/F5DA2B64-25EB-4370-9E89-FA5689859796/UniversalMac_14.6_23G80_Restore.ipsw"
+  // will be update to 14.8.2
+  from_ipsw    = "https://updates.cdn-apple.com/2024SummerFCS/fullrestores/062-52859/932E0A8F-6644-4759-82DA-F8FA8DEA806A/UniversalMac_14.6.1_23G93_Restore.ipsw"
   vm_name      = "sonoma-vanilla"
   cpu_count    = 4
   memory_gb    = 8
-  disk_size_gb = 40
+  disk_size_gb = 50
   ssh_password = "admin"
   ssh_username = "admin"
-  ssh_timeout  = "120s"
+  ssh_timeout  = "180s"
   boot_command = [
     # hello, hola, bonjour, etc.
     "<wait60s><spacebar>",
@@ -127,12 +128,20 @@ build {
     inline = [
       # Install command-line tools
       "touch /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress",
-      "softwareupdate --list | sed -n 's/.*Label: \\(Command Line Tools for Xcode-.*\\)/\\1/p' | tr '\\n' '\\0' | xargs -0 softwareupdate --install",
+      "softwareupdate --list | sed -n 's/.*Label: \\(Command Line Tools for Xcode-.*\\)/\\1/p' | xargs -I {} softwareupdate --install '{}'",
       "rm /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress",
     ]
   }
 
   provisioner "ansible" {
     playbook_file = "ansible/playbook-system-updater.yml"
+    extra_arguments = [
+      "-vvv",
+    ]
+    ansible_env_vars = [
+      "ANSIBLE_TRANSPORT=paramiko",
+      "ANSIBLE_HOST_KEY_CHECKING=False",
+    ]
+    use_proxy = false
   }
 }

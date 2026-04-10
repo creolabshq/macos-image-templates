@@ -17,7 +17,7 @@ source "tart-cli" "tart" {
   vm_name      = "monterey-vanilla"
   cpu_count    = 4
   memory_gb    = 8
-  disk_size_gb = 40
+  disk_size_gb = 50
   ssh_password = "admin"
   ssh_username = "admin"
   ssh_timeout  = "120s"
@@ -128,12 +128,21 @@ build {
     inline = [
       # Install command-line tools
       "touch /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress",
-      "softwareupdate --list | sed -n 's/.*Label: \\(Command Line Tools for Xcode-.*\\)/\\1/p' | tr '\\n' '\\0' | xargs -0 softwareupdate --install",
+      "softwareupdate --list | sed -n 's/.*Label: \\(Command Line Tools for Xcode-.*\\)/\\1/p' | xargs -I {} softwareupdate --install '{}'",
       "rm /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress",
     ]
   }
 
   provisioner "ansible" {
     playbook_file = "ansible/playbook-system-updater.yml"
+    extra_arguments = [
+      "-vvv",
+      "--extra-vars", "stdinpass=admin",
+    ]
+    ansible_env_vars = [
+      "ANSIBLE_TRANSPORT=paramiko",
+      "ANSIBLE_HOST_KEY_CHECKING=False",
+    ]
+    use_proxy = false
   }
 }
